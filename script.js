@@ -26,7 +26,7 @@ options = {
     },
     columns: [
         { title: "IP address", field: "ip" },
-        { title: "Region", field: "region" },
+        { title: "Colo", field: "region" },
         {
             title: "Mean Respond Time", field: "time", sorter: "number", sorterParams: {
                 alignEmptyValues: "bottom",
@@ -41,7 +41,7 @@ options = {
 }
 if (typeof (page) != 'undefined' && page) {
     options.pagination = "local" // pagination may cause problem in mobile devices
-    options.paginationSize = 100
+    options.paginationSize = page
 }
 table = new Tabulator("#main-table", options)
 
@@ -82,18 +82,20 @@ $("#select-random").click(function () {
 })
 
 $("#download").click(function () {
-    table.download("csv", "test_result.csv", {bom:true}) 
+    table.download("csv", "test_result.csv", { bom: true })
     // include BOM to ensure that UTF-8 characters can be correctly interpereted
 })
 
 
 // Respond time test
 function tcpingCallback(time, id) {
-    database[id].time.push(time)
-    var alln = database[id].time.length
+    var timebase = database[id].time
+    timebase.push(time)
+    var str = ""
+    var alln = timebase.length - 1
     var validset = []
     var sum = 0
-    database[id].time.forEach(function (one) {
+    timebase.slice(1).forEach(function (one) {
         if (one > 0) {
             validset.push(one)
             sum += one
@@ -101,8 +103,7 @@ function tcpingCallback(time, id) {
     })
     var validn = validset.length
     var mean = sum / validn
-    var str = ""
-    if (validn > 1) {
+    if (validn >= 2) {
         str = " (" + validn + "/" + alln + ")"
         var sumsq = 0
         validset.forEach(function (one) {
@@ -111,8 +112,11 @@ function tcpingCallback(time, id) {
         var std = Math.sqrt(sumsq / validn)
         str = mean.toFixed(1) + "ms" + " σ=" + std.toFixed(1) + str
     }
-    else if (validn == 1) {
-        str = mean.toFixed(1) + "ms" + str
+    else if (validn == 1 && alln > 0) {
+        str = mean.toFixed(1) + "ms" + str + " (" + validn + "/" + alln + ")"
+    }
+    else if (validn == 0 && alln == 0 && time > 1) {
+        str = time.toFixed(1) + "ms" + str + " (warm-up)"
     }
     else {
         str = "Timeout" + str
@@ -125,6 +129,7 @@ function tcping(addr, callback, id) {
     var started = window.performance.now()
     var http = new XMLHttpRequest()
     http.open("GET", addr, true)
+    http.setRequestHeader('Accept', 'text/html')
     http.onreadystatechange = function () {
         if (http.readyState == 2) {
             //var ended = new Date().getTime()
@@ -149,7 +154,7 @@ function tcping(addr, callback, id) {
     http.send(null)
 }
 
-var positionSort = function(a,b){
+var positionSort = function (a, b) {
     return a.getPosition(true) - b.getPosition(true)
 }
 
